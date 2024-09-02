@@ -1,5 +1,4 @@
 
-// Exercise 1-1
 #[derive(Debug, PartialEq)]
 pub struct HexParseError; // make this more useful
 
@@ -41,25 +40,30 @@ impl ParseBytes for Vec<u8> {
 }
 
 pub trait RenderBytes {
-    fn as_base64_byte_string(self) -> Vec<u8>;
+    fn as_base64_byte_vec(self) -> Vec<u8>;
+    fn as_hex_byte_vec(self) -> Vec<u8>;
 }
 
-impl RenderBytes for Vec<u8> {
-    
-    fn as_base64_byte_string(self) -> Vec<u8> {
+impl RenderBytes for Vec<u8> {    
+    fn as_base64_byte_vec(self) -> Vec<u8> {
         const SYMBOLS: [u8; 64] = *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         
-        let mut output = vec![0u8; self.len() * 4 / 3];
-        let mut output_pos = 0;
+        let mut output = Vec::with_capacity(self.len() * 4 / 3);
         for chunk in self.chunks(3) {
-            output[output_pos] = SYMBOLS[(chunk[0] >> 2) as usize];
-            output_pos += 1;
-            output[output_pos] = SYMBOLS[((chunk[0] & 0b11) << 4 | chunk[1] >> 4) as usize];
-            output_pos += 1;
-            output[output_pos] = SYMBOLS[((chunk[1] & 0b1111) << 2 | chunk[2] >> 6) as usize];
-            output_pos += 1;
-            output[output_pos] = SYMBOLS[(chunk[2] & 0b111111) as usize];
-            output_pos += 1;
+            output.push(SYMBOLS[(chunk[0] >> 2) as usize]);
+            output.push(SYMBOLS[((chunk[0] & 0b11) << 4 | chunk[1] >> 4) as usize]);
+            output.push(SYMBOLS[((chunk[1] & 0b1111) << 2 | chunk[2] >> 6) as usize]);
+            output.push(SYMBOLS[(chunk[2] & 0b111111) as usize]);
+        }
+        output
+    }
+
+    fn as_hex_byte_vec(self) -> Vec<u8> {
+        let mut output = Vec::with_capacity(self.len() * 2);
+        for byte in self {
+            let pair = format!("{:02x}", byte).into_bytes();
+            output.push(pair[0]);
+            output.push(pair[1]);
         }
         output
     }
@@ -91,13 +95,19 @@ mod tests {
         let hex = b"49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
         let base64 = b"SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t";
         let input = Vec::from_hex_byte_array(hex).unwrap();
-        assert_eq!(input.as_base64_byte_string(), base64.to_vec());
+        assert_eq!(input.as_base64_byte_vec(), base64.to_vec());
     }
     
     #[test]
     fn test_from_hex_byte_array() {
         assert_eq!(Vec::from_hex_byte_array(b"123456").unwrap(), vec![0x12u8, 0x34u8, 0x56u8]);
         assert_eq!(Vec::from_hex_byte_array(b"12345"), Err(HexParseError));
+    }
+
+    #[test]
+    fn test_as_hex_byte_vec() {
+        let hex = b"49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
+        assert_eq!(Vec::from_hex_byte_array(hex).unwrap().as_hex_byte_vec(), hex.to_vec());
     }
 
 }
