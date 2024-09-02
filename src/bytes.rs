@@ -44,7 +44,8 @@ pub trait RenderBytes {
     fn as_hex_byte_vec(self) -> Vec<u8>;
 }
 
-impl RenderBytes for Vec<u8> {    
+impl RenderBytes for Vec<u8> {
+    // Exercise 1-1
     fn as_base64_byte_vec(self) -> Vec<u8> {
         const SYMBOLS: [u8; 64] = *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         
@@ -67,6 +68,13 @@ impl RenderBytes for Vec<u8> {
         }
         output
     }
+}
+
+// Exercise 1-2
+pub fn fixed_xor_byte_vec(a: Vec<u8>, b: Vec<u8>) -> Vec<u8> {
+    assert_eq!(a.len(), b.len()); // not dealing with other cases right now
+
+    a.iter().zip(b.iter()).map(|(x, y)| x ^ y).collect()
 }
 
 #[cfg(test)]
@@ -110,4 +118,14 @@ mod tests {
         assert_eq!(Vec::from_hex_byte_array(hex).unwrap().as_hex_byte_vec(), hex.to_vec());
     }
 
+    // Exercise 1-2
+    #[test]
+    fn test_fixed_xor_byte_vec() {
+        let a = b"1c0111001f010100061a024b53535009181c";
+        let b = b"686974207468652062756c6c277320657965";
+        let expected = b"746865206b696420646f6e277420706c6179";
+
+        let xored = fixed_xor_byte_vec(Vec::from_hex_byte_array(a).unwrap(), Vec::from_hex_byte_array(b).unwrap());
+        assert_eq!(xored.as_hex_byte_vec(), expected.to_vec());
+    }
 }
