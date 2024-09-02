@@ -41,18 +41,17 @@ impl ParseBytes for Vec<u8> {
 }
 
 pub trait RenderBytes {
-    fn as_base64_byte_string(self) -> Result<Vec<u8>, HexParseError>;
+    fn as_base64_byte_string(self) -> Vec<u8>;
 }
 
 impl RenderBytes for Vec<u8> {
     
-    fn as_base64_byte_string(self) -> Result<Vec<u8>, HexParseError> {
+    fn as_base64_byte_string(self) -> Vec<u8> {
         const SYMBOLS: [u8; 64] = *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         
-        let input = Vec::from_hex_byte_vec(self)?;
-        let mut output = vec![0u8; input.len() * 4 / 3];
+        let mut output = vec![0u8; self.len() * 4 / 3];
         let mut output_pos = 0;
-        for chunk in input.chunks(3) {
+        for chunk in self.chunks(3) {
             output[output_pos] = SYMBOLS[(chunk[0] >> 2) as usize];
             output_pos += 1;
             output[output_pos] = SYMBOLS[((chunk[0] & 0b11) << 4 | chunk[1] >> 4) as usize];
@@ -62,9 +61,8 @@ impl RenderBytes for Vec<u8> {
             output[output_pos] = SYMBOLS[(chunk[2] & 0b111111) as usize];
             output_pos += 1;
         }
-        Ok(output)
+        output
     }
-
 }
 
 #[cfg(test)]
@@ -92,7 +90,8 @@ mod tests {
     fn test_hex_to_base_64() {
         let hex = b"49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
         let base64 = b"SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t";
-        assert_eq!(hex.to_vec().as_base64_byte_string(), Ok(base64.to_vec()));
+        let input = Vec::from_hex_byte_array(hex).unwrap();
+        assert_eq!(input.as_base64_byte_string(), base64.to_vec());
     }
     
     #[test]
