@@ -71,10 +71,11 @@ impl RenderBytes for Vec<u8> {
 }
 
 // Exercise 1-2
-pub fn fixed_xor_byte_vec(a: Vec<u8>, b: Vec<u8>) -> Vec<u8> {
-    assert_eq!(a.len(), b.len()); // not dealing with other cases right now
+pub fn xor_byte_vec(message: Vec<u8>, key: Vec<u8>) -> Vec<u8> {
+    assert!(message.len() >= key.len());
 
-    a.iter().zip(b.iter()).map(|(x, y)| x ^ y).collect()
+    let key_extended_iter = key.iter().cycle().take(message.len());
+    message.iter().zip(key_extended_iter).map(|(x, y)| x ^ y).collect()
 }
 
 #[cfg(test)]
@@ -125,7 +126,17 @@ mod tests {
         let b = b"686974207468652062756c6c277320657965";
         let expected = b"746865206b696420646f6e277420706c6179";
 
-        let xored = fixed_xor_byte_vec(Vec::from_hex_byte_array(a).unwrap(), Vec::from_hex_byte_array(b).unwrap());
+        let xored = xor_byte_vec(Vec::from_hex_byte_array(a).unwrap(), Vec::from_hex_byte_array(b).unwrap());
         assert_eq!(xored.as_hex_byte_vec(), expected.to_vec());
+    }
+
+    // Exercise 1-3
+    #[test]
+    fn test_repeated_xor_byte_vec() {
+        let plaintext = b"000000ffffff";
+        let key = b"ff00";
+        let expected = b"ff00ffff00ff";
+        assert_eq!(xor_byte_vec(Vec::from_hex_byte_array(plaintext).unwrap(), Vec::from_hex_byte_array(key).unwrap()),
+            Vec::from_hex_byte_array(expected).unwrap());
     }
 }
