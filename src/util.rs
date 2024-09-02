@@ -18,18 +18,18 @@ fn hex_u8_to_u8(x: u8) -> Result<u8, HexParseError> {
 pub fn hex_to_base64(hex_bytes: Vec<u8>) -> Result<Vec<u8>, HexParseError> {
     const SYMBOLS: [u8; 64] = *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-    let mut input = hex_bytes.clone();
-    input.resize(input.len() / 3 * 3, 0);
-    let mut output = vec![0u8; input.len() * 2 / 3];
+    let input = Vec::from_hex_byte_vec(hex_bytes)?;
+    let mut output = vec![0u8; input.len() * 4 / 3];
     let mut output_pos = 0;
     for chunk in input.chunks(3) {
-        let a: u16 = ((hex_u8_to_u8(chunk[0])? as u16) << 8) +
-            ((hex_u8_to_u8(chunk[1])? as u16) << 4) +
-            hex_u8_to_u8(chunk[2])? as u16;
-            output[output_pos] = SYMBOLS[(a >> 6 & 0b111111) as usize];
-            output_pos += 1;
-            output[output_pos] = SYMBOLS[(a & 0b111111) as usize];
-            output_pos += 1;
+        output[output_pos] = SYMBOLS[(chunk[0] >> 2) as usize];
+        output_pos += 1;
+        output[output_pos] = SYMBOLS[((chunk[0] & 0b11) << 4 | chunk[1] >> 4) as usize];
+        output_pos += 1;
+        output[output_pos] = SYMBOLS[((chunk[1] & 0b1111) << 2 | chunk[2] >> 6) as usize];
+        output_pos += 1;
+        output[output_pos] = SYMBOLS[(chunk[2] & 0b111111) as usize];
+        output_pos += 1;
     }
     Ok(output)
 }
@@ -42,22 +42,28 @@ pub fn hex_to_base64(hex_bytes: Vec<u8>) -> Result<Vec<u8>, HexParseError> {
 
 
 trait ParseHexByteArray {
+    fn from_hex_byte_vec(src: Vec<u8>) -> Result<Vec<u8>, HexParseError>;
     fn from_hex_byte_array(src: &[u8]) -> Result<Vec<u8>, HexParseError>;
 }
 
 impl ParseHexByteArray for Vec<u8> {
-    fn from_hex_byte_array(src: &[u8]) -> Result<Vec<u8>, HexParseError> {
+    fn from_hex_byte_vec(src: Vec<u8>) -> Result<Self, HexParseError> {
         if src.len() % 2 == 1 {
-            return Err(HexParseError);
-        }
-
-        let input = src.to_vec();
-        let mut output = Vec::with_capacity(src.len() * 2);
-        for chunk in input.chunks(2) {
-            output.push(hex_u8_to_u8(chunk[0])? << 4 | hex_u8_to_u8(chunk[1])?);
-        }
-        Ok(output)
+        return Err(HexParseError);
     }
+
+    let input = src.to_vec();
+    let mut output = Vec::with_capacity(src.len() * 2);
+    for chunk in input.chunks(2) {
+        output.push(hex_u8_to_u8(chunk[0])? << 4 | hex_u8_to_u8(chunk[1])?);
+    }
+    Ok(output)
+}
+    fn from_hex_byte_array(src: &[u8]) -> Result<Self, HexParseError> {
+        Self::from_hex_byte_vec(src.to_vec())
+    }
+
+
 }
 
 #[cfg(test)]
