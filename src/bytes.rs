@@ -71,7 +71,7 @@ impl RenderBytes for Vec<u8> {
 }
 
 // Exercise 1-2
-pub fn xor_byte_vec(message: Vec<u8>, key: Vec<u8>) -> Vec<u8> {
+pub fn xor_byte_vec(message: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
     assert!(message.len() >= key.len());
 
     let key_extended_iter = key.iter().cycle().take(message.len());
