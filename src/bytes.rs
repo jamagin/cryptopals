@@ -25,7 +25,7 @@ impl ParseBytes for Vec<u8> {
         if src.len() % 2 == 1 {
             return Err(HexParseError);
         }
-        
+
         let input = src.to_vec();
         let mut output = Vec::with_capacity(src.len() * 2);
         for chunk in input.chunks(2) {
@@ -33,7 +33,7 @@ impl ParseBytes for Vec<u8> {
         }
         Ok(output)
     }
-    
+
     fn from_hex_byte_array(src: &[u8]) -> Result<Self, HexParseError> {
         Self::from_hex_byte_vec(src.to_vec())
     }
@@ -48,7 +48,7 @@ impl RenderBytes for Vec<u8> {
     // Exercise 1-1
     fn as_base64_byte_vec(self) -> Vec<u8> {
         const SYMBOLS: [u8; 64] = *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        
+
         let mut output = Vec::with_capacity(self.len() * 4 / 3);
         for chunk in self.chunks(3) {
             output.push(SYMBOLS[(chunk[0] >> 2) as usize]);
@@ -81,7 +81,7 @@ pub fn xor_byte_vec(message: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_hex_u8_to_u8() {
         for x in 0..255 {
@@ -97,7 +97,7 @@ mod tests {
             }
         }
     }
-    
+
     // Exercise 1-1
     #[test]
     fn test_hex_to_base_64() {
@@ -106,7 +106,7 @@ mod tests {
         let input = Vec::from_hex_byte_array(hex).unwrap();
         assert_eq!(input.as_base64_byte_vec(), base64.to_vec());
     }
-    
+
     #[test]
     fn test_from_hex_byte_array() {
         assert_eq!(Vec::from_hex_byte_array(b"123456").unwrap(), vec![0x12u8, 0x34u8, 0x56u8]);
@@ -126,7 +126,7 @@ mod tests {
         let b = b"686974207468652062756c6c277320657965";
         let expected = b"746865206b696420646f6e277420706c6179";
 
-        let xored = xor_byte_vec(Vec::from_hex_byte_array(a).unwrap(), Vec::from_hex_byte_array(b).unwrap());
+        let xored = xor_byte_vec(&Vec::from_hex_byte_array(a).unwrap(), &Vec::from_hex_byte_array(b).unwrap());
         assert_eq!(xored.as_hex_byte_vec(), expected.to_vec());
     }
 
@@ -136,7 +136,7 @@ mod tests {
         let plaintext = b"000000ffffff";
         let key = b"ff00";
         let expected = b"ff00ffff00ff";
-        assert_eq!(xor_byte_vec(Vec::from_hex_byte_array(plaintext).unwrap(), Vec::from_hex_byte_array(key).unwrap()),
+        assert_eq!(xor_byte_vec(&Vec::from_hex_byte_array(plaintext).unwrap(), &Vec::from_hex_byte_array(key).unwrap()),
             Vec::from_hex_byte_array(expected).unwrap());
     }
 }

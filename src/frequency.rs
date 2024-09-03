@@ -2,39 +2,12 @@ use std::{cmp::min, collections::HashMap};
 use crate::bytes::xor_byte_vec;
 
 
-// Wagner-Fischer algorithm, probably the wrong approach but I wanna
-fn levenshtein_distance(a: Vec<u8>, b: Vec<u8>) -> usize {
-    
-    if a.len() == 0 {
-        return b.len();
-    }
-    if b.len() == 0 {
-        return a.len();
-    }
-    let mut d = vec![vec![0usize; b.len()]; a.len()];
-    
-    for i in 0..a.len() {
-        d[i][0] = i;
-    }
-    
-    for j in 0..b.len() {
-        d[0][j] = j;
-    }
-    
-    for j in 1..b.len() {
-        for i in 1..a.len() {
-            let mut substitution_cost = 0usize;
-            if a[i] != b[j] {
-                substitution_cost = 1;
-            }
-            d[i][j] = min(min(d[i-1][j] + 1, d[i][j-1] + 1), d[i-1][j-1] + substitution_cost);
-        }
-    }
-    d[a.len() - 1][b.len() - 1]
-}
-
 // Exercise 1-3
-const MOST_FREQUENT_ENGLISH_LETTERS: [u8; 26] = *b"etaoinshrdlcumwfgypbvkjxqz";
+const ENGLISH_LETTER_FREQ: [f32; 26] = // https://en.wikipedia.org/wiki/Letter_frequency
+    [0.082, 0.015, 0.028, 0.043, 0.127, 0.022, 0.02,    // A-G
+     0.061, 0.07, 0.0015, 0.0066, 0.04, 0.024, 0.067,  // H-N
+     0.075, 0.019, 0.00095, 0.06, 0.063, 0.091, 0.028, // O-U
+     0.0098, 0.024, 0.0015, 0.02, 0.00074];            // V-Z
 
 fn count_frequencies(text: &Vec<u8>) -> Vec<u8> {
     let frequencies = text.iter().filter(|x| x.is_ascii_alphabetic())
@@ -45,11 +18,11 @@ fn count_frequencies(text: &Vec<u8>) -> Vec<u8> {
         .or_insert(1usize);
         map
     });
-    
+
     let mut most_frequent_vec = frequencies.iter().collect::<Vec<(&u8, &usize)>>();
     // let mut most_frequent_vec = frequencies.iter().collect::<Vec<(&u8, &usize)>>();
     most_frequent_vec.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
-    
+
     most_frequent_vec.iter().map(|(v, _)| *v).cloned().collect()
 }
 
@@ -63,28 +36,28 @@ pub fn crack_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
         let decrypt = xor_byte_vec(&cyphertext, &vec![key]);
         println!("{} {:x?} {}", key, decrypt, String::from_utf8_lossy(decrypt.clone().as_slice()));
         let frequencies = count_frequencies(&decrypt);
-        let distance = levenshtein_distance(MOST_FREQUENT_ENGLISH_LETTERS.to_vec(), frequencies.clone());
+        let distance = 0;
         if (min_distance == None) || (distance < min_distance.unwrap()) {
             min_distance = Some(distance);
             best_key = key;
             best_decrypt = decrypt.clone();
         }
     }
-    (best_key, best_decrypt)    
+    (best_key, best_decrypt)
 }
-    
+
 
 mod tests {
     use super::*;
-    
+
     // Exercise 1-3
     #[test]
-    fn test_levenshtein_distance() {
-        assert_eq!(levenshtein_distance(b"abcdef".to_vec(), b"abcdef".to_vec()), 0);
-        assert_eq!(levenshtein_distance(b"".to_vec(), b"".to_vec()), 0);
-        assert_eq!(levenshtein_distance(b"abcdef".to_vec(), b"".to_vec()), 6);
-        assert_eq!(levenshtein_distance(b"abcdef".to_vec(), b"abzdef".to_vec()), 1);
-        assert_eq!(levenshtein_distance(b"abcdef".to_vec(), b"abcef".to_vec()), 1);
-        assert_eq!(levenshtein_distance(b"abcdef".to_vec(), b"abccdef".to_vec()), 1);
+    fn test_letter_frequency_reference() {
+        const MOST_FREQUENT_ENGLISH_LETTERS: [u8; 26] = *b"etaoinshrdlcumwfgypbvkjxqz";
+        let mut x: Vec<(u8, f32)> = ENGLISH_LETTER_FREQ.iter().enumerate()
+            .map(|(letter, freq)| (letter as u8 + b'a', *freq)).collect();
+        x.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        assert_eq!(x.iter().map(|(letter, _)| *letter).collect::<Vec<u8>>(), MOST_FREQUENT_ENGLISH_LETTERS.to_vec());
+        assert!(x.iter().map(|(_, freq)| *freq).reduce(|a, b| a+b).unwrap().abs() - 1.0 < 0.001);
     }
 }
