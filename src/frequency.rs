@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::HashMap};
+use std::{collections::HashMap, iter::zip};
 use crate::bytes::xor_byte_vec;
 
 
@@ -9,7 +9,7 @@ const ENGLISH_LETTER_FREQ: [f32; 26] = // https://en.wikipedia.org/wiki/Letter_f
      0.075, 0.019, 0.00095, 0.06, 0.063, 0.091, 0.028, // O-U
      0.0098, 0.024, 0.0015, 0.02, 0.00074];            // V-Z
 
-fn count_frequencies(text: &Vec<u8>) -> Vec<u8> {
+fn count_frequencies(text: &Vec<u8>) -> Vec<f32> {
     let frequencies = text.iter().filter(|x| x.is_ascii_alphabetic())
     .map(|x| x.to_ascii_lowercase())
     .fold(HashMap::new(), |mut map, val| {
@@ -18,26 +18,32 @@ fn count_frequencies(text: &Vec<u8>) -> Vec<u8> {
         .or_insert(1usize);
         map
     });
+ 
+    let count_vec: Vec<usize> = (0u8..26u8).map(|letter| frequencies.get(&(letter + 'a' as u8)).unwrap_or(&0)).copied().collect();
+    let total = count_vec.iter().sum::<usize>();
 
-    let mut most_frequent_vec = frequencies.iter().collect::<Vec<(&u8, &usize)>>();
-    // let mut most_frequent_vec = frequencies.iter().collect::<Vec<(&u8, &usize)>>();
-    most_frequent_vec.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+    // a missing character puts us far away
+    count_vec.iter().map(|freq| if *freq == 0 { 1000f32 } else { *freq as f32 / total as f32 }).collect()
+}
 
-    most_frequent_vec.iter().map(|(v, _)| *v).cloned().collect()
+fn sum_squares_distance(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
+    assert_eq!(a.len(), b.len());
+
+    zip(a, b).map(|(a, b)| (a-b).powi(2)).sum()
 }
 
 pub fn crack_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
-    let mut min_distance: Option<usize> = None;
+    let mut min_distance: Option<f32> = None;
     let mut best_key = 0x00;
     let mut best_decrypt = cyphertext.clone();
+    let reference = ENGLISH_LETTER_FREQ.to_vec();
 
-    println!("{:x?}", cyphertext.clone());
     for key in 0x00..=0xff {
         let decrypt = xor_byte_vec(&cyphertext, &vec![key]);
-        println!("{} {:x?} {}", key, decrypt, String::from_utf8_lossy(decrypt.clone().as_slice()));
         let frequencies = count_frequencies(&decrypt);
-        let distance = 0;
-        if (min_distance == None) || (distance < min_distance.unwrap()) {
+        let distance = sum_squares_distance(&frequencies, &reference);
+
+        if (min_distance.is_none()) || (distance < min_distance.unwrap()) {
             min_distance = Some(distance);
             best_key = key;
             best_decrypt = decrypt.clone();
@@ -48,8 +54,6 @@ pub fn crack_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
 
 
 mod tests {
-    use super::*;
-
     // Exercise 1-3
     #[test]
     fn test_letter_frequency_reference() {

@@ -1,10 +1,10 @@
-use cryptopals::{bytes::{self, ParseBytes},frequency};
+use cryptopals::{bytes::ParseBytes,frequency};
 
 fn main() {
     let cyphertext = b"1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
 
     let cypher_bytes = Vec::from_hex_byte_array(cyphertext).unwrap();
     let (key, text) = frequency::crack_single_byte_xor(cypher_bytes.clone());
-    println!("{:?} {} {:?} {}", cypher_bytes, key, text, String::from_utf8(text.clone()).unwrap());
+    println!("{:x} {:x?} {}", key, text, String::from_utf8(text.clone()).unwrap());
 }
 

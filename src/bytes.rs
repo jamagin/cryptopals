@@ -3,9 +3,9 @@
 pub struct HexParseError; // make this more useful
 
 fn hex_u8_to_u8(x: u8) -> Result<u8, HexParseError> {
-    let is_letter = (((x >= b'A') & (x <= b'F')) | ((x >= b'a') & (x <=b'f'))) as u8;
+    let is_letter = ((b'A'..=b'F').contains(&x) | (b'a'..=b'f').contains(&x)) as u8;
     let letter_off = (x & 0b0000111) + 9;
-    let is_digit = ((x >= b'0') & (x <= b'9')) as u8;
+    let is_digit = x.is_ascii_digit() as u8;
     let digit_off = x & 0b0001111;
     let output = is_letter * letter_off + is_digit * digit_off;
     match is_letter | is_digit {
@@ -13,7 +13,6 @@ fn hex_u8_to_u8(x: u8) -> Result<u8, HexParseError> {
         _ => Ok(output),
     }
 }
-
 
 pub trait ParseBytes {
     fn from_hex_byte_vec(src: Vec<u8>) -> Result<Vec<u8>, HexParseError>;
