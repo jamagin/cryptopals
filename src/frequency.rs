@@ -23,7 +23,7 @@ fn count_frequencies(text: &Vec<u8>) -> Vec<f32> {
     let total = count_vec.iter().sum::<usize>();
 
     // a missing character puts us far away
-    count_vec.iter().map(|freq| if *freq == 0 { 1000f32 } else { *freq as f32 / total as f32 }).collect()
+    count_vec.iter().map(|freq| if *freq == 0 { 0f32 } else { *freq as f32 / total as f32 }).collect()
 }
 
 fn sum_squares_distance(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
@@ -40,8 +40,10 @@ pub fn crack_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
 
     for key in 0x00..=0xff {
         let decrypt = xor_byte_vec(&cyphertext, &vec![key]);
-        let frequencies = count_frequencies(&decrypt);
-        let distance = sum_squares_distance(&frequencies, &reference);
+        let (letters, non_letters): (Vec<u8>, Vec<u8>) = decrypt.iter().partition(|x| x.is_ascii_alphabetic());
+        let frequencies = count_frequencies(&letters);
+        let penalty = non_letters.len();
+        let distance = sum_squares_distance(&frequencies, &reference) + penalty as f32;
 
         if (min_distance.is_none()) || (distance < min_distance.unwrap()) {
             min_distance = Some(distance);
