@@ -1,6 +1,7 @@
 use crate::bytes::xor_byte_vec;
 use std::{collections::HashMap, iter::zip};
 
+#[rustfmt::skip]
 const ENGLISH_LETTER_FREQ: [f32; 26] = // https://en.wikipedia.org/wiki/Letter_frequency
     [
         0.082, 0.015, 0.028, 0.043, 0.127, 0.022, 0.02,   // A-G
@@ -72,8 +73,7 @@ pub fn crack_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
 
 mod tests {
     use super::*;
-    use crate::{bytes::ParseBytes, frequency};
-
+    use crate::bytes::ParseBytes;
     #[test]
     fn test_letter_frequency_reference() {
         const MOST_FREQUENT_ENGLISH_LETTERS: [u8; 26] = *b"etaoinshrdlcumwfgypbvkjxqz";
@@ -104,7 +104,7 @@ mod tests {
         let cyphertext = b"1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
 
         let cypher_bytes = Vec::from_hex_byte_array(cyphertext).unwrap();
-        let (key, text) = frequency::crack_single_byte_xor(cypher_bytes.clone());
+        let (key, text) = crack_single_byte_xor(cypher_bytes.clone());
         println!(
             "{:x} {:x?} {}",
             key,
