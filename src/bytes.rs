@@ -38,12 +38,12 @@ impl ParseBytes for Vec<u8> {
 }
 
 pub trait RenderBytes {
-    fn as_base64_byte_vec(self) -> Vec<u8>;
-    fn as_hex_byte_vec(self) -> Vec<u8>;
+    fn to_base64_byte_vec(&self) -> Vec<u8>;
+    fn to_hex_byte_vec(&self) -> Vec<u8>;
 }
 
 impl RenderBytes for Vec<u8> {
-    fn as_base64_byte_vec(self) -> Vec<u8> {
+    fn to_base64_byte_vec(&self) -> Vec<u8> {
         const SYMBOLS: [u8; 64] =
             *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -57,7 +57,7 @@ impl RenderBytes for Vec<u8> {
         output
     }
 
-    fn as_hex_byte_vec(self) -> Vec<u8> {
+    fn to_hex_byte_vec(&self) -> Vec<u8> {
         let mut output = Vec::with_capacity(self.len() * 2);
         for byte in self {
             let pair = format!("{:02x}", byte).into_bytes();
@@ -69,7 +69,7 @@ impl RenderBytes for Vec<u8> {
 }
 
 // Exercise 1-2
-pub fn xor_byte_vec(message: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
+pub fn xor_byte_array(message: &[u8], key: &[u8]) -> Vec<u8> {
     assert!(message.len() >= key.len());
 
     let key_extended_iter = key.iter().cycle().take(message.len());
@@ -88,11 +88,11 @@ mod tests {
     fn test_hex_u8_to_u8() {
         for x in 0..255 {
             let y = hex_u8_to_u8(x);
-            if x >= b'0' && x <= b'9' {
+            if x.is_ascii_digit() {
                 assert_eq!(y, Ok(x - b'0'));
-            } else if x >= b'A' && x <= b'F' {
+            } else if (b'A'..=b'F').contains(&x) {
                 assert_eq!(y, Ok(x - b'A' + 10));
-            } else if x >= b'a' && x <= b'f' {
+            } else if (b'a'..=b'f').contains(&x) {
                 assert_eq!(y, Ok(x - b'a' + 10));
             } else {
                 assert_eq!(y, Err(HexParseError));
@@ -106,7 +106,7 @@ mod tests {
         let hex = b"49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
         let base64 = b"SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t";
         let input = Vec::from_hex_byte_array(hex).unwrap();
-        assert_eq!(input.as_base64_byte_vec(), base64.to_vec());
+        assert_eq!(input.to_base64_byte_vec(), base64.to_vec());
     }
 
     #[test]
@@ -122,7 +122,7 @@ mod tests {
     fn test_as_hex_byte_vec() {
         let hex = b"49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
         assert_eq!(
-            Vec::from_hex_byte_array(hex).unwrap().as_hex_byte_vec(),
+            Vec::from_hex_byte_array(hex).unwrap().to_hex_byte_vec(),
             hex.to_vec()
         );
     }
@@ -134,11 +134,11 @@ mod tests {
         let b = b"686974207468652062756c6c277320657965";
         let expected = b"746865206b696420646f6e277420706c6179";
 
-        let xored = xor_byte_vec(
+        let xored = xor_byte_array(
             &Vec::from_hex_byte_array(a).unwrap(),
             &Vec::from_hex_byte_array(b).unwrap(),
         );
-        assert_eq!(xored.as_hex_byte_vec(), expected.to_vec());
+        assert_eq!(xored.to_hex_byte_vec(), expected.to_vec());
     }
 
     #[test]
@@ -147,7 +147,7 @@ mod tests {
         let key = b"ff00";
         let expected = b"ff00ffff00ff";
         assert_eq!(
-            xor_byte_vec(
+            xor_byte_array(
                 &Vec::from_hex_byte_array(plaintext).unwrap(),
                 &Vec::from_hex_byte_array(key).unwrap()
             ),
@@ -165,7 +165,7 @@ mod tests {
             b"0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272\
             a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f";
         assert_eq!(
-            xor_byte_vec(&plaintext.to_vec(), &key.to_vec()),
+            xor_byte_array(plaintext, key),
             Vec::from_hex_byte_array(expected).unwrap()
         );
     }

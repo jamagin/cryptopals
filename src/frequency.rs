@@ -1,4 +1,4 @@
-use crate::bytes::xor_byte_vec;
+use crate::bytes::xor_byte_array;
 use std::{collections::HashMap, iter::zip};
 
 #[rustfmt::skip]
@@ -10,7 +10,7 @@ const ENGLISH_LETTER_FREQ: [f32; 26] = // https://en.wikipedia.org/wiki/Letter_f
         0.0098, 0.024, 0.0015, 0.02, 0.00074,                // V-Z
     ];
 
-fn count_frequencies(text: &Vec<u8>) -> Vec<f32> {
+fn count_frequencies(text: &[u8]) -> Vec<f32> {
     let frequencies = text
         .iter()
         .filter(|x| x.is_ascii_alphabetic())
@@ -23,7 +23,7 @@ fn count_frequencies(text: &Vec<u8>) -> Vec<f32> {
         });
 
     let count_vec: Vec<usize> = (0u8..26u8)
-        .map(|letter| frequencies.get(&(letter + 'a' as u8)).unwrap_or(&0))
+        .map(|letter| frequencies.get(&(letter + b'a')).unwrap_or(&0))
         .copied()
         .collect();
     let total = count_vec.iter().sum::<usize>();
@@ -47,14 +47,14 @@ fn sum_squares_distance(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     zip(a, b).map(|(a, b)| (a - b).powi(2)).sum()
 }
 
-pub fn crack_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
+pub fn break_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
     let mut min_distance: Option<f32> = None;
     let mut best_key = 0x00;
     let mut best_decrypt = cyphertext.clone();
     let reference = ENGLISH_LETTER_FREQ.to_vec();
 
     for key in 0x00..=0xff {
-        let decrypt = xor_byte_vec(&cyphertext, &vec![key]);
+        let decrypt = xor_byte_array(&cyphertext, &[key]);
         let (letters, non_letters): (Vec<u8>, Vec<u8>) =
             decrypt.iter().partition(|x| x.is_ascii_alphabetic());
         let frequencies = count_frequencies(&letters);
@@ -105,7 +105,7 @@ mod tests {
         let cyphertext = b"1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
 
         let cypher_bytes = Vec::from_hex_byte_array(cyphertext).unwrap();
-        let (key, text) = crack_single_byte_xor(cypher_bytes.clone());
+        let (key, text) = break_single_byte_xor(cypher_bytes.clone());
         println!(
             "{:x} {:x?} {}",
             key,
