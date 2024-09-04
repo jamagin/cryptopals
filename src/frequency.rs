@@ -71,6 +71,7 @@ pub fn crack_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
     (best_key, best_decrypt)
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::bytes::ParseBytes;
