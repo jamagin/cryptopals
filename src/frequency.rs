@@ -55,10 +55,11 @@ pub fn break_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
 
     for key in 0x00..=0xff {
         let decrypt = xor_byte_array(&cyphertext, &[key]);
-        let (letters, non_letters): (Vec<u8>, Vec<u8>) =
+        let (letters, mut non_letters): (Vec<u8>, Vec<u8>) =
             decrypt.iter().partition(|x| x.is_ascii_alphabetic());
         let frequencies = count_frequencies(&letters);
         // least sum of squares difference, but count of non-letters penalizes a lot
+        non_letters.retain(|x| *x != b' '); // spaces are free
         let penalty = non_letters.len();
         let distance = sum_squares_distance(&frequencies, &reference) + penalty as f32;
 
