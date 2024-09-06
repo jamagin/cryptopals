@@ -41,13 +41,14 @@ fn count_frequencies(text: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+// TODO: also try chisquared
 fn sum_squares_distance(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     assert_eq!(a.len(), b.len());
 
     zip(a, b).map(|(a, b)| (a - b).powi(2)).sum()
 }
 
-pub fn break_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
+pub fn break_single_byte_xor(cyphertext: Vec<u8>) -> (f32, u8, Vec<u8>) {
     let mut min_distance: Option<f32> = None;
     let mut best_key = 0x00;
     let mut best_decrypt = cyphertext.clone();
@@ -69,13 +70,16 @@ pub fn break_single_byte_xor(cyphertext: Vec<u8>) -> (u8, Vec<u8>) {
             best_decrypt = decrypt.clone();
         }
     }
-    (best_key, best_decrypt)
+    (
+        min_distance.expect("did you even try"),
+        best_key,
+        best_decrypt,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bytes::ParseBytes;
     #[test]
     fn test_letter_frequency_reference() {
         const MOST_FREQUENT_ENGLISH_LETTERS: [u8; 26] = *b"etaoinshrdlcumwfgypbvkjxqz";

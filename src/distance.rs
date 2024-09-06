@@ -1,7 +1,7 @@
 use std::{cmp::min, iter::zip};
 
 // Wagner-Fischer algorithm
-#[allow(clippy::needless_range_loop)]  // maintaining the style of the pseudocode
+#[allow(clippy::needless_range_loop)] // maintaining the style of the pseudocode
 pub fn levenshtein_distance(a: &[u8], b: &[u8]) -> usize {
     if a.is_empty() {
         return b.len();
