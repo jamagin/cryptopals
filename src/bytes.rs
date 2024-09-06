@@ -13,6 +13,22 @@ fn hex_u8_to_u8(x: u8) -> Result<u8, HexParseError> {
     }
 }
 
+const BASE64_SYMBOLS: [u8; 64] =
+    *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+const BASE64_OFFSETS: [u8; 127] = generate_base64_offsets();
+
+const fn generate_base64_offsets() -> [u8; 127] {
+    let mut table = [0u8; 127];
+    let mut i = 0;
+    while i < BASE64_SYMBOLS.len() {
+        table[BASE64_SYMBOLS[i] as usize] = i as u8;
+        i += 1;
+    }
+    table
+}
+
+
 pub trait ParseBytes {
     fn from_hex_byte_vec(src: Vec<u8>) -> Result<Vec<u8>, HexParseError>;
     fn from_hex_byte_array(src: &[u8]) -> Result<Vec<u8>, HexParseError>;
@@ -44,19 +60,17 @@ pub trait RenderBytes {
 
 impl RenderBytes for Vec<u8> {
     fn to_base64_byte_vec(&self) -> Vec<u8> {
-        const SYMBOLS: [u8; 64] =
-            *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
+        
         let mut output = Vec::with_capacity(self.len() * 4 / 3);
         for chunk in self.chunks(3) {
-            output.push(SYMBOLS[(chunk[0] >> 2) as usize]);
-            output.push(SYMBOLS[((chunk[0] & 0b11) << 4 | chunk[1] >> 4) as usize]);
-            output.push(SYMBOLS[((chunk[1] & 0b1111) << 2 | chunk[2] >> 6) as usize]);
-            output.push(SYMBOLS[(chunk[2] & 0b111111) as usize]);
+            output.push(BASE64_SYMBOLS[(chunk[0] >> 2) as usize]);
+            output.push(BASE64_SYMBOLS[((chunk[0] & 0b11) << 4 | chunk[1] >> 4) as usize]);
+            output.push(BASE64_SYMBOLS[((chunk[1] & 0b1111) << 2 | chunk[2] >> 6) as usize]);
+            output.push(BASE64_SYMBOLS[(chunk[2] & 0b111111) as usize]);
         }
         output
     }
-
+    
     fn to_hex_byte_vec(&self) -> Vec<u8> {
         let mut output = Vec::with_capacity(self.len() * 2);
         for byte in self {
@@ -71,19 +85,19 @@ impl RenderBytes for Vec<u8> {
 // Exercise 1-2
 pub fn xor_byte_array(message: &[u8], key: &[u8]) -> Vec<u8> {
     assert!(message.len() >= key.len());
-
+    
     let key_extended_iter = key.iter().cycle().take(message.len());
     message
-        .iter()
-        .zip(key_extended_iter)
-        .map(|(x, y)| x ^ y)
-        .collect()
+    .iter()
+    .zip(key_extended_iter)
+    .map(|(x, y)| x ^ y)
+    .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    
     #[test]
     fn test_hex_u8_to_u8() {
         for x in 0..255 {
