@@ -56,8 +56,4 @@ mod tests {
     fn test_hamming_distance() {
         assert_eq!(hamming_distance(b"this is a test", b"wokka wokka!!!"), 37);
     }
-
-    // Exercise 1-5
-    #[test]
-    fn decrypt_repeating_xor() {}
 }

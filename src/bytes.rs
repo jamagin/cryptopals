@@ -155,7 +155,7 @@ mod tests {
         );
     }
 
-    // Exercise 1-4
+    // Exercise 1-5 solution
     #[test]
     fn test_repeated_xor_byte_vec_for_1_5() {
         let plaintext = b"Burning 'em, if you ain't quick and nimble\n\
