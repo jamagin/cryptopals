@@ -1,6 +1,6 @@
 #[derive(Debug, PartialEq)]
 pub struct HexParseError; // make this more useful
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Base64ParseError;
 
 fn hex_u8_to_u8(x: u8) -> Result<u8, HexParseError> {
@@ -21,6 +21,7 @@ const BASE64_SYMBOLS: [u8; 64] =
 const BASE64_OFFSETS: [Result<u8, Base64ParseError>; 127] = generate_base64_offsets();
 const fn generate_base64_offsets() -> [Result<u8, Base64ParseError>; 127] {
     let mut table = [Err(Base64ParseError); 127];
+    table[b'=' as usize] = Ok(0u8); // padding, will not be left in result
     let mut i = 0;
     while i < BASE64_SYMBOLS.len() {
         table[BASE64_SYMBOLS[i] as usize] = Ok(i as u8);
@@ -54,12 +55,16 @@ impl ParseBytes for Vec<u8> {
     }
 
     fn from_base64_byte_array(src: &[u8]) -> Result<Self, Base64ParseError> {
-        if src.len() % 3 == 0 {
+        let src_filtered: Vec<u8> = src
+            .iter()
+            .filter(|x| BASE64_SYMBOLS.contains(x) || **x == b'=')
+            .copied()
+            .collect();
+        if src_filtered.len() % 4 != 0 {
             return Err(Base64ParseError);
         }
-
-        let mut result: Vec<u8> = Vec::with_capacity(src.len() * 3 / 4);
-        for chunk in src.chunks(4) {
+        let mut result: Vec<u8> = Vec::with_capacity(src_filtered.len() * 3 / 4);
+        for chunk in src_filtered.chunks(4) {
             let resolved = ((BASE64_OFFSETS[chunk[0] as usize]? as u32) << 18)
                 + ((BASE64_OFFSETS[chunk[1] as usize]? as u32) << 12)
                 + ((BASE64_OFFSETS[chunk[2] as usize]? as u32) << 6)
@@ -67,6 +72,13 @@ impl ParseBytes for Vec<u8> {
             result.push((resolved >> 16) as u8);
             result.push(((resolved >> 8) & 0xff) as u8);
             result.push((resolved & 0xff) as u8);
+        }
+        let padding = src_filtered[src_filtered.len() - 2..src_filtered.len()]
+            .iter()
+            .filter(|x| **x == b'=')
+            .count();
+        if padding > 0 {
+            result.truncate(result.len() - padding);
         }
         Ok(result)
     }
@@ -199,6 +211,23 @@ mod tests {
         assert_eq!(
             xor_byte_array(plaintext, key),
             Vec::from_hex_byte_array(expected).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_base64_decode() {
+        assert_eq!(Vec::from_base64_byte_array(b"Q2F0").unwrap(), b"Cat");
+        assert_eq!(
+            Vec::from_base64_byte_array(b"dGFuZ2libGU=").unwrap(),
+            b"tangible"
+        );
+        assert_eq!(
+            Vec::from_base64_byte_array(b"Y29nbml6YW5jZQ==").unwrap(),
+            b"cognizance"
+        );
+        assert_eq!(
+            Vec::from_base64_byte_array(b"VGhpc\nyBpc yBhIE1\nJTUUgdGVzdA==\n").unwrap(),
+            b"This is a MIME test"
         );
     }
 }
