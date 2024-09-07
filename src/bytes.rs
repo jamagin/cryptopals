@@ -1,5 +1,7 @@
 #[derive(Debug, PartialEq)]
 pub struct HexParseError; // make this more useful
+#[derive(Clone, Copy)]
+pub struct Base64ParseError;
 
 fn hex_u8_to_u8(x: u8) -> Result<u8, HexParseError> {
     let is_letter = ((b'A'..=b'F').contains(&x) | (b'a'..=b'f').contains(&x)) as u8;
@@ -16,22 +18,21 @@ fn hex_u8_to_u8(x: u8) -> Result<u8, HexParseError> {
 const BASE64_SYMBOLS: [u8; 64] =
     *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-const BASE64_OFFSETS: [u8; 127] = generate_base64_offsets();
-
-const fn generate_base64_offsets() -> [u8; 127] {
-    let mut table = [0u8; 127];
+const BASE64_OFFSETS: [Result<u8, Base64ParseError>; 127] = generate_base64_offsets();
+const fn generate_base64_offsets() -> [Result<u8, Base64ParseError>; 127] {
+    let mut table = [Err(Base64ParseError); 127];
     let mut i = 0;
     while i < BASE64_SYMBOLS.len() {
-        table[BASE64_SYMBOLS[i] as usize] = i as u8;
+        table[BASE64_SYMBOLS[i] as usize] = Ok(i as u8);
         i += 1;
     }
     table
 }
 
-
 pub trait ParseBytes {
     fn from_hex_byte_vec(src: Vec<u8>) -> Result<Vec<u8>, HexParseError>;
     fn from_hex_byte_array(src: &[u8]) -> Result<Vec<u8>, HexParseError>;
+    fn from_base64_byte_array(src: &[u8]) -> Result<Vec<u8>, Base64ParseError>;
 }
 
 impl ParseBytes for Vec<u8> {
@@ -51,6 +52,24 @@ impl ParseBytes for Vec<u8> {
     fn from_hex_byte_array(src: &[u8]) -> Result<Self, HexParseError> {
         Self::from_hex_byte_vec(src.to_vec())
     }
+
+    fn from_base64_byte_array(src: &[u8]) -> Result<Self, Base64ParseError> {
+        if src.len() % 3 == 0 {
+            return Err(Base64ParseError);
+        }
+
+        let mut result: Vec<u8> = Vec::with_capacity(src.len() * 3 / 4);
+        for chunk in src.chunks(4) {
+            let resolved = ((BASE64_OFFSETS[chunk[0] as usize]? as u32) << 18)
+                + ((BASE64_OFFSETS[chunk[1] as usize]? as u32) << 12)
+                + ((BASE64_OFFSETS[chunk[2] as usize]? as u32) << 6)
+                + (BASE64_OFFSETS[chunk[3] as usize]? as u32);
+            result.push((resolved >> 16) as u8);
+            result.push(((resolved >> 8) & 0xff) as u8);
+            result.push((resolved & 0xff) as u8);
+        }
+        Ok(result)
+    }
 }
 
 pub trait RenderBytes {
@@ -60,7 +79,6 @@ pub trait RenderBytes {
 
 impl RenderBytes for Vec<u8> {
     fn to_base64_byte_vec(&self) -> Vec<u8> {
-        
         let mut output = Vec::with_capacity(self.len() * 4 / 3);
         for chunk in self.chunks(3) {
             output.push(BASE64_SYMBOLS[(chunk[0] >> 2) as usize]);
@@ -70,7 +88,7 @@ impl RenderBytes for Vec<u8> {
         }
         output
     }
-    
+
     fn to_hex_byte_vec(&self) -> Vec<u8> {
         let mut output = Vec::with_capacity(self.len() * 2);
         for byte in self {
@@ -85,19 +103,19 @@ impl RenderBytes for Vec<u8> {
 // Exercise 1-2
 pub fn xor_byte_array(message: &[u8], key: &[u8]) -> Vec<u8> {
     assert!(message.len() >= key.len());
-    
+
     let key_extended_iter = key.iter().cycle().take(message.len());
     message
-    .iter()
-    .zip(key_extended_iter)
-    .map(|(x, y)| x ^ y)
-    .collect()
+        .iter()
+        .zip(key_extended_iter)
+        .map(|(x, y)| x ^ y)
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_hex_u8_to_u8() {
         for x in 0..255 {
