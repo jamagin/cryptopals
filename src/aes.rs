@@ -57,16 +57,20 @@ const fn inverse(a: u8) -> u8 {
     a_inv
 }
 
-const sbox: [u8; 256] = sbox_gen_all();
+const SBOX: [u8; 256] = sbox_gen_all().0;
+const INV_SBOX: [u8; 256] = sbox_gen_all().1;
 
-const fn sbox_gen_all() -> [u8; 256] {
+const fn sbox_gen_all() -> ([u8; 256], [u8; 256]) {
     let mut result = [0u8; 256];
+    let mut inv_result = [0u8; 256];
     let mut i = 0x00;
     while i <= 0xff {
-        result[i] = sbox_calc(i as u8);
+        let x = sbox_calc(i as u8);
+        result[i] = x;
+        inv_result[x as usize] = i as u8;
         i += 1;
     }
-    result
+    (result, inv_result)
 }
 
 const fn sbox_calc(a: u8) -> u8 {
@@ -86,17 +90,17 @@ const fn sbox_calc(a: u8) -> u8 {
 }
 
 fn subword(a: u32) -> u32 {
-    ((sbox[((a >> 24) & 0xff) as usize] as u32) << 24)
-        | ((sbox[((a >> 16) & 0xff) as usize] as u32) << 16)
-        | ((sbox[((a >> 8) & 0xff) as usize] as u32) << 8)
-        | (sbox[(a & 0xff) as usize] as u32)
+    ((SBOX[((a >> 24) & 0xff) as usize] as u32) << 24)
+        | ((SBOX[((a >> 16) & 0xff) as usize] as u32) << 16)
+        | ((SBOX[((a >> 8) & 0xff) as usize] as u32) << 8)
+        | (SBOX[(a & 0xff) as usize] as u32)
 }
 
 fn key_expansion(key: &[u8], n_k: usize, n_r: usize) -> Vec<u32> {
     let mut w = vec![0u32; n_k * (n_r + 1)];
     for i in 0..n_k {
         for j in 0..n_k {
-            w[i] |= (key[i] as u32) << ((n_k - 1 - j) * 8);
+            w[i] |= (key[i * 4 + j] as u32) << ((n_k - 1 - j) * 8);
         }
     }
     for i in n_k..=4 * n_r + 3 {
@@ -123,9 +127,9 @@ mod test {
         // some basic tests that it's an affine transform
         let mut found = [0u8; 256];
         for i in 0x0..=0xff {
-            let val = sbox[i] as usize;
+            let val = SBOX[i] as usize;
             assert_ne!(val, i);
-            found[sbox[i] as usize] += 1;
+            found[SBOX[i] as usize] += 1;
         }
         for i in 0..=0xff {
             assert_eq!(found[i], 1);
