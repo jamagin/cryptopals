@@ -2,3 +2,6 @@
 name = "cryptopals"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+assert_hex = "0.4.1"
