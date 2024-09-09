@@ -5,7 +5,10 @@ pub fn decrypt_aes_128_ecb(key: &[u8], cyphertext: &[u8]) -> Vec<u8> {
     const N_K: usize = 4;
     const N_R: usize = 10;
     let w = key_expansion(key, N_K, N_R);
-    cyphertext.chunks(16).flat_map(|block| inv_cypher(block.try_into().unwrap(), N_R, w.as_slice())).collect()
+    cyphertext
+        .chunks(16)
+        .flat_map(|block| inv_cypher(block.try_into().unwrap(), N_R, w.as_slice()))
+        .collect()
 }
 
 type State = [u32; 4];
@@ -16,12 +19,12 @@ pub fn inv_cypher(block: [u8; 16], n_r: usize, w: &[u32]) -> [u8; 16] {
         state[i] = u32::from_ne_bytes(chunk.try_into().unwrap());
     }
 
-    add_round_key(&mut state, w[4 * n_r ..= 4 * n_r + 3].try_into().unwrap());
+    add_round_key(&mut state, w[4 * n_r..=4 * n_r + 3].try_into().unwrap());
 
-    for round in n_r-1 ..= 1 {
+    for round in n_r - 1..=1 {
         inv_shift_rows(&mut state);
         inv_sub_bytes(&mut state);
-        add_round_key(&mut state, w[4 * round ..= 4 * round + 3].try_into().unwrap());
+        add_round_key(&mut state, w[4 * round..=4 * round + 3].try_into().unwrap());
         inv_mix_columns(&mut state);
     }
 
@@ -29,7 +32,14 @@ pub fn inv_cypher(block: [u8; 16], n_r: usize, w: &[u32]) -> [u8; 16] {
     inv_sub_bytes(&mut state);
     add_round_key(&mut state, w[0..=3].try_into().unwrap());
 
-    state.map(|x| x.to_ne_bytes()).iter().flatten().copied().collect::<Vec<u8>>().try_into().unwrap()
+    state
+        .map(|x| x.to_ne_bytes())
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap()
 }
 
 fn add_round_key(state: &mut State, w_round: State) {
@@ -39,12 +49,39 @@ fn add_round_key(state: &mut State, w_round: State) {
 }
 
 fn inv_shift_rows(state: &mut State) {
-    let bytes: [u8; 16] = state.map(|x| x.to_ne_bytes()).iter().flatten().copied().collect::<Vec<u8>>().try_into().unwrap();
+    let bytes: [u8; 16] = state
+        .map(|x| x.to_le_bytes())
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap();
     *state = [
-        u32::from_ne_bytes([bytes[1*4+3], bytes[2*4+2], bytes[3*4+1], bytes[0]]),
-        u32::from_ne_bytes([bytes[2*4+3], bytes[3*4+2], bytes[0*4+1], bytes[0]]),
-        u32::from_ne_bytes([bytes[3*4+3], bytes[0*4+2], bytes[1*4+1], bytes[0]]),
-        u32::from_ne_bytes([bytes[0*4+3], bytes[1*4+2], bytes[2*4+1], bytes[0]]),
+        u32::from_le_bytes([
+            bytes[1 * 4 + 3],
+            bytes[2 * 4 + 2],
+            bytes[3 * 4 + 1],
+            bytes[0],
+        ]),
+        u32::from_le_bytes([
+            bytes[2 * 4 + 3],
+            bytes[3 * 4 + 2],
+            bytes[0 * 4 + 1],
+            bytes[1],
+        ]),
+        u32::from_le_bytes([
+            bytes[3 * 4 + 3],
+            bytes[0 * 4 + 2],
+            bytes[1 * 4 + 1],
+            bytes[2],
+        ]),
+        u32::from_le_bytes([
+            bytes[0 * 4 + 3],
+            bytes[1 * 4 + 2],
+            bytes[2 * 4 + 1],
+            bytes[3],
+        ]),
     ];
 }
 
@@ -52,18 +89,25 @@ fn inv_sub_bytes(state: &mut State) {
     state.iter_mut().for_each(|x| *x = inv_subword(*x));
 }
 
-fn inv_mix_columns(state: &mut State)  {
+fn inv_mix_columns(state: &mut State) {
     let row0 = [0x09, 0x0d, 0x0b, 0x0e];
 
     state.iter_mut().for_each(|x| {
-        let bytes = (*x).to_ne_bytes();
-        let mut acc = 0;
+        // loop over columns
+        let input_bytes = (*x).to_ne_bytes();
+        let mut output_bytes = [0u8; 4];
         let mut row = row0;
-        for c in 0..=3 {
-            acc ^= xtimes(row[c], bytes[c]);
+        for byte_off in 0..=3 {
+            // loop to populate result bytes in a column
+            let mut acc = 0;
+            for i in 0..=3 {
+                // loop to multiply by a row in the matrix
+                acc ^= xtimes(row[i], input_bytes[i]);
+            }
+            output_bytes[byte_off] = acc;
             row.rotate_left(1);
         }
-        *x = u32::from_ne_bytes(bytes);
+        *x = u32::from_ne_bytes(output_bytes);
     });
 }
 
@@ -219,24 +263,46 @@ mod test {
         assert_eq_hex!(key_expansion(&key, key.len() / 4, 10), expanded);
     }
 
-        #[test]
-        fn test_aes_128_ecb_decrypt() {
-            let cyphertext = Vec::from_base64_byte_array(
-                b"wFHE//yjH+f8ZNyYulYNmDcBxXOgLkqTFp5jcyiO6wVf7WGDdECNqhUuG9TMW6sP\
+    #[test]
+    fn test_inv_shift_rows() {
+        let mut input = [0x30201000, 0x31211101, 0x32221202, 0x33231303];
+        inv_shift_rows(&mut input);
+        assert_eq_hex!(
+            input,
+            [0x31221300, 0x32231001, 0x33201102, 0x30211203],
+        )
+
+    }
+
+    #[test]
+    fn test_inv_mix_columns() {
+        let mut input = [0x01010101, 0x02020202, 0x03030303, 0x04040404];
+        inv_mix_columns(&mut input);
+        assert_eq_hex!(
+            input,
+            [0,0,0,0],
+        )
+
+    }
+
+    #[test]
+    fn test_aes_128_ecb_decrypt() {
+        let cyphertext = Vec::from_base64_byte_array(
+            b"wFHE//yjH+f8ZNyYulYNmDcBxXOgLkqTFp5jcyiO6wVf7WGDdECNqhUuG9TMW6sP\
     exwZineeuL0xuuXdLP8BrxWV+XNHdR/yBAVgnOSDRoiAxugMHjs06GuRF/ihwFQJ\
     1qhhuwAXzo7k7DfG5s/JmGkw+i9BcnnO4QBnqixHzzuv0kFyUpRW4O1hlIyr5bo3\
     r0aCB9FlVf+tB8f9SteYZ9Y12G+f1n3n1hVSdOiAMuU1qfgy6VmH350PrbdwNv5K",
-            )
-            .unwrap();
-            let key = Vec::from_hex_byte_array(b"9c1501ffb829537afba091def401a25c").unwrap();
-            let decrypt = decrypt_aes_128_ecb(key.as_slice(), cyphertext.as_slice());
-            println!("{}", String::from_utf8_lossy(decrypt.as_slice()));
-            assert_eq_hex!(
-                decrypt.as_slice(),
-                b"I know you wanted me to stay\n\
+        )
+        .unwrap();
+        let key = Vec::from_hex_byte_array(b"9c1501ffb829537afba091def401a25c").unwrap();
+        let decrypt = decrypt_aes_128_ecb(key.as_slice(), cyphertext.as_slice());
+        println!("{}", String::from_utf8_lossy(decrypt.as_slice()));
+        assert_eq_hex!(
+            decrypt.as_slice(),
+            b"I know you wanted me to stay\n\
     But I can't ignore the crazy visions of me in LA\n\
     And I heard that there's a special place\n\
     Where boys and girls can all be queens every single day\n"
-            )
-        }
+        )
+    }
 }
