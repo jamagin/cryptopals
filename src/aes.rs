@@ -1,13 +1,77 @@
 // for AES-128 per FIPS 197:
-// 16 byte (128 bit key)
+// 16 byte (128 bit key) (4 word)
 // 10 rounds
 
+use std::iter::zip;
+
 pub fn decrypt_aes_128_ecb(key: &[u8], cyphertext: &[u8]) -> Vec<u8> {
-    vec![]
+    const N_K: usize = 4;
+    const N_R: usize = 10;
+    let w = key_expansion(key, N_K, N_R);
+    cyphertext.chunks(16).map(|block| inv_cypher(block.try_into().unwrap(), N_R, w.as_slice())).flatten().collect()
+}
+
+type State = [u32; 4];
+
+pub fn inv_cypher(block: [u8; 16], n_r: usize, w: &[u32]) -> [u8; 16] {
+    let mut state: State = [0u32; 4];
+    for (i, chunk) in block.chunks_exact(4).enumerate() {
+        state[i] = u32::from_ne_bytes(chunk.try_into().unwrap());
+    }
+
+    state = add_round_key(state, w[4 * n_r .. 4 * n_r + 3].try_into().unwrap());
+
+    for round in n_r-1 .. 1 {
+        state = inv_shift_rows(state);
+        state = inv_sub_bytes(state);
+        state = add_round_key(state, w[4 * round .. 4 * round + 3].try_into().unwrap());
+        state = inv_mix_columns(state);
+    }
+
+    state = inv_shift_rows(state);
+    state = inv_sub_bytes(state);
+    state = add_round_key(state, w[0 .. 3].try_into().unwrap());
+
+    state.map(|x| x.to_ne_bytes()).iter().flatten().copied().collect::<Vec<u8>>().try_into().unwrap()
+}
+
+fn add_round_key(state: State, w_round: State) -> State {
+    let x: Vec<u32> = zip(state, w_round).map(|(a, b)| a ^ b).collect();
+    x.try_into().unwrap()
+}
+
+fn inv_shift_rows(state: State) -> State {
+    let bytes: [u8; 16] = state.map(|x| x.to_ne_bytes()).iter().flatten().copied().collect::<Vec<u8>>().try_into().unwrap();
+    [
+        u32::from_ne_bytes([bytes[1*4+3], bytes[2*4+2], bytes[3*4+1], bytes[0]]),
+        u32::from_ne_bytes([bytes[2*4+3], bytes[3*4+2], bytes[0*4+1], bytes[0]]),
+        u32::from_ne_bytes([bytes[3*4+3], bytes[0*4+2], bytes[1*4+1], bytes[0]]),
+        u32::from_ne_bytes([bytes[0*4+3], bytes[1*4+2], bytes[2*4+1], bytes[0]]),
+    ]
+}
+
+fn inv_sub_bytes(state: State) -> State {
+    state.map(|x| inv_subword(x))
+}
+
+fn inv_mix_columns(state: State) -> State {
+    let mut result: State = [0u32; 4];
+    let row0 = [0x09, 0x0d, 0x0b, 0x0e];
+
+    for column in 0..3 {
+        let bytes = state[column].to_ne_bytes();
+        let mut acc = 0;
+        let mut row = row0;
+        for b in 0..3 {
+            acc ^= xtimes(row[b], bytes[b]);
+            row.rotate_left(1);
+        }
+        result[column] = u32::from_ne_bytes(bytes)
+    }
+    result
 }
 
 // multiplication in GF(2^8)
-// FIXME I don't like this
 const fn xtimes(a: u8, b: u8) -> u8 {
     let mut a_mut = a;
     let mut b_mut = b;
@@ -28,7 +92,7 @@ const fn xtimes(a: u8, b: u8) -> u8 {
     result as u8
 }
 
-const Rcon: [u32; 11] = generate_rcon();
+const RCON: [u32; 11] = generate_rcon();
 const fn generate_rcon() -> [u32; 11] {
     let mut table = [0u32; 11];
     let mut acc: u8 = 1;
@@ -89,11 +153,18 @@ const fn sbox_calc(a: u8) -> u8 {
     acc ^ reduction
 }
 
-fn subword(a: u32) -> u32 {
+const fn subword(a: u32) -> u32 {
     ((SBOX[((a >> 24) & 0xff) as usize] as u32) << 24)
         | ((SBOX[((a >> 16) & 0xff) as usize] as u32) << 16)
         | ((SBOX[((a >> 8) & 0xff) as usize] as u32) << 8)
         | (SBOX[(a & 0xff) as usize] as u32)
+}
+
+const fn inv_subword(a: u32) -> u32 {
+    ((INV_SBOX[((a >> 24) & 0xff) as usize] as u32) << 24)
+        | ((INV_SBOX[((a >> 16) & 0xff) as usize] as u32) << 16)
+        | ((INV_SBOX[((a >> 8) & 0xff) as usize] as u32) << 8)
+        | (INV_SBOX[(a & 0xff) as usize] as u32)
 }
 
 fn key_expansion(key: &[u8], n_k: usize, n_r: usize) -> Vec<u32> {
@@ -106,7 +177,7 @@ fn key_expansion(key: &[u8], n_k: usize, n_r: usize) -> Vec<u32> {
     for i in n_k..=4 * n_r + 3 {
         let mut temp = w[i - 1];
         if i % n_k == 0 {
-            temp = subword(rotword(temp)) ^ Rcon[i / n_k];
+            temp = subword(rotword(temp)) ^ RCON[i / n_k];
         } else if (n_k > 6) && (i % n_k == 4) {
             temp = subword(temp)
         }
@@ -152,22 +223,22 @@ mod test {
         assert_eq_hex!(key_expansion(&key, key.len() / 4, 10), expanded);
     }
 
-    //     #[test]
-    //     fn test_aes_128_ecb_decrypt() {
-    //         let cyphertext = Vec::from_base64_byte_array(
-    //             b"wFHE//yjH+f8ZNyYulYNmDcBxXOgLkqTFp5jcyiO6wVf7WGDdECNqhUuG9TMW6sP\
-    // exwZineeuL0xuuXdLP8BrxWV+XNHdR/yBAVgnOSDRoiAxugMHjs06GuRF/ihwFQJ\
-    // 1qhhuwAXzo7k7DfG5s/JmGkw+i9BcnnO4QBnqixHzzuv0kFyUpRW4O1hlIyr5bo3\
-    // r0aCB9FlVf+tB8f9SteYZ9Y12G+f1n3n1hVSdOiAMuU1qfgy6VmH350PrbdwNv5K",
-    //         )
-    //         .unwrap();
-    //         let key = Vec::from_hex_byte_array(b"9c1501ffb829537afba091def401a25c").unwrap();
-    //         assert_eq!(
-    //             decrypt_aes_128_ecb(key.as_slice(), cyphertext.as_slice()).as_slice(),
-    //             b"I know you wanted me to stay\n\
-    // But I can't ignore the crazy visions of me in LA\n\
-    // And I heard that there's a special place\n\
-    // Where boys and girls can all be queens every single day\n"
-    //         )
-    //     }
+        #[test]
+        fn test_aes_128_ecb_decrypt() {
+            let cyphertext = Vec::from_base64_byte_array(
+                b"wFHE//yjH+f8ZNyYulYNmDcBxXOgLkqTFp5jcyiO6wVf7WGDdECNqhUuG9TMW6sP\
+    exwZineeuL0xuuXdLP8BrxWV+XNHdR/yBAVgnOSDRoiAxugMHjs06GuRF/ihwFQJ\
+    1qhhuwAXzo7k7DfG5s/JmGkw+i9BcnnO4QBnqixHzzuv0kFyUpRW4O1hlIyr5bo3\
+    r0aCB9FlVf+tB8f9SteYZ9Y12G+f1n3n1hVSdOiAMuU1qfgy6VmH350PrbdwNv5K",
+            )
+            .unwrap();
+            let key = Vec::from_hex_byte_array(b"9c1501ffb829537afba091def401a25c").unwrap();
+            assert_eq!(
+                decrypt_aes_128_ecb(key.as_slice(), cyphertext.as_slice()).as_slice(),
+                b"I know you wanted me to stay\n\
+    But I can't ignore the crazy visions of me in LA\n\
+    And I heard that there's a special place\n\
+    Where boys and girls can all be queens every single day\n"
+            )
+        }
 }
