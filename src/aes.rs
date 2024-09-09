@@ -1,14 +1,11 @@
 // for AES-128 per FIPS 197:
 // 16 byte (128 bit key) (4 word)
 // 10 rounds
-
-use std::iter::zip;
-
 pub fn decrypt_aes_128_ecb(key: &[u8], cyphertext: &[u8]) -> Vec<u8> {
     const N_K: usize = 4;
     const N_R: usize = 10;
     let w = key_expansion(key, N_K, N_R);
-    cyphertext.chunks(16).map(|block| inv_cypher(block.try_into().unwrap(), N_R, w.as_slice())).flatten().collect()
+    cyphertext.chunks(16).flat_map(|block| inv_cypher(block.try_into().unwrap(), N_R, w.as_slice())).collect()
 }
 
 type State = [u32; 4];
@@ -19,56 +16,55 @@ pub fn inv_cypher(block: [u8; 16], n_r: usize, w: &[u32]) -> [u8; 16] {
         state[i] = u32::from_ne_bytes(chunk.try_into().unwrap());
     }
 
-    state = add_round_key(state, w[4 * n_r .. 4 * n_r + 3].try_into().unwrap());
+    add_round_key(&mut state, w[4 * n_r ..= 4 * n_r + 3].try_into().unwrap());
 
-    for round in n_r-1 .. 1 {
-        state = inv_shift_rows(state);
-        state = inv_sub_bytes(state);
-        state = add_round_key(state, w[4 * round .. 4 * round + 3].try_into().unwrap());
-        state = inv_mix_columns(state);
+    for round in n_r-1 ..= 1 {
+        inv_shift_rows(&mut state);
+        inv_sub_bytes(&mut state);
+        add_round_key(&mut state, w[4 * round ..= 4 * round + 3].try_into().unwrap());
+        inv_mix_columns(&mut state);
     }
 
-    state = inv_shift_rows(state);
-    state = inv_sub_bytes(state);
-    state = add_round_key(state, w[0 .. 3].try_into().unwrap());
+    inv_shift_rows(&mut state);
+    inv_sub_bytes(&mut state);
+    add_round_key(&mut state, w[0..=3].try_into().unwrap());
 
     state.map(|x| x.to_ne_bytes()).iter().flatten().copied().collect::<Vec<u8>>().try_into().unwrap()
 }
 
-fn add_round_key(state: State, w_round: State) -> State {
-    let x: Vec<u32> = zip(state, w_round).map(|(a, b)| a ^ b).collect();
-    x.try_into().unwrap()
+fn add_round_key(state: &mut State, w_round: State) {
+    for i in 0..=3 {
+        state[i] ^= w_round[i];
+    }
 }
 
-fn inv_shift_rows(state: State) -> State {
+fn inv_shift_rows(state: &mut State) {
     let bytes: [u8; 16] = state.map(|x| x.to_ne_bytes()).iter().flatten().copied().collect::<Vec<u8>>().try_into().unwrap();
-    [
+    *state = [
         u32::from_ne_bytes([bytes[1*4+3], bytes[2*4+2], bytes[3*4+1], bytes[0]]),
         u32::from_ne_bytes([bytes[2*4+3], bytes[3*4+2], bytes[0*4+1], bytes[0]]),
         u32::from_ne_bytes([bytes[3*4+3], bytes[0*4+2], bytes[1*4+1], bytes[0]]),
         u32::from_ne_bytes([bytes[0*4+3], bytes[1*4+2], bytes[2*4+1], bytes[0]]),
-    ]
+    ];
 }
 
-fn inv_sub_bytes(state: State) -> State {
-    state.map(|x| inv_subword(x))
+fn inv_sub_bytes(state: &mut State) {
+    state.iter_mut().for_each(|x| *x = inv_subword(*x));
 }
 
-fn inv_mix_columns(state: State) -> State {
-    let mut result: State = [0u32; 4];
+fn inv_mix_columns(state: &mut State)  {
     let row0 = [0x09, 0x0d, 0x0b, 0x0e];
 
-    for column in 0..3 {
-        let bytes = state[column].to_ne_bytes();
+    state.iter_mut().for_each(|x| {
+        let bytes = (*x).to_ne_bytes();
         let mut acc = 0;
         let mut row = row0;
-        for b in 0..3 {
-            acc ^= xtimes(row[b], bytes[b]);
+        for c in 0..=3 {
+            acc ^= xtimes(row[c], bytes[c]);
             row.rotate_left(1);
         }
-        result[column] = u32::from_ne_bytes(bytes)
-    }
-    result
+        *x = u32::from_ne_bytes(bytes);
+    });
 }
 
 // multiplication in GF(2^8)
@@ -233,8 +229,10 @@ mod test {
             )
             .unwrap();
             let key = Vec::from_hex_byte_array(b"9c1501ffb829537afba091def401a25c").unwrap();
-            assert_eq!(
-                decrypt_aes_128_ecb(key.as_slice(), cyphertext.as_slice()).as_slice(),
+            let decrypt = decrypt_aes_128_ecb(key.as_slice(), cyphertext.as_slice());
+            println!("{}", String::from_utf8_lossy(decrypt.as_slice()));
+            assert_eq_hex!(
+                decrypt.as_slice(),
                 b"I know you wanted me to stay\n\
     But I can't ignore the crazy visions of me in LA\n\
     And I heard that there's a special place\n\
