@@ -49,39 +49,14 @@ fn add_round_key(state: &mut State, w_round: State) {
 }
 
 fn inv_shift_rows(state: &mut State) {
-    let bytes: [u8; 16] = state
-        .map(|x| x.to_le_bytes())
-        .iter()
-        .flatten()
-        .copied()
-        .collect::<Vec<u8>>()
-        .try_into()
-        .unwrap();
+    let bytes: [[u8; 4]; 4] = state.map(|x| x.to_le_bytes());
+
+    // little-endian makes this code read like the spec
     *state = [
-        u32::from_le_bytes([
-            bytes[1 * 4 + 3],
-            bytes[2 * 4 + 2],
-            bytes[3 * 4 + 1],
-            bytes[0],
-        ]),
-        u32::from_le_bytes([
-            bytes[2 * 4 + 3],
-            bytes[3 * 4 + 2],
-            bytes[0 * 4 + 1],
-            bytes[1],
-        ]),
-        u32::from_le_bytes([
-            bytes[3 * 4 + 3],
-            bytes[0 * 4 + 2],
-            bytes[1 * 4 + 1],
-            bytes[2],
-        ]),
-        u32::from_le_bytes([
-            bytes[0 * 4 + 3],
-            bytes[1 * 4 + 2],
-            bytes[2 * 4 + 1],
-            bytes[3],
-        ]),
+        u32::from_le_bytes([bytes[0][0], bytes[3][1], bytes[2][2], bytes[1][3]]),
+        u32::from_le_bytes([bytes[1][0], bytes[0][1], bytes[3][2], bytes[2][3]]),
+        u32::from_le_bytes([bytes[2][0], bytes[1][1], bytes[0][2], bytes[3][3]]),
+        u32::from_le_bytes([bytes[3][0], bytes[2][1], bytes[1][2], bytes[0][3]]),
     ];
 }
 
@@ -89,25 +64,41 @@ fn inv_sub_bytes(state: &mut State) {
     state.iter_mut().for_each(|x| *x = inv_subword(*x));
 }
 
-fn inv_mix_columns(state: &mut State) {
-    let row0 = [0x09, 0x0d, 0x0b, 0x0e];
-
-    state.iter_mut().for_each(|x| {
+fn mix_columns(state: &mut State) {
+    state.iter_mut().for_each(|column| {
         // loop over columns
-        let input_bytes = (*x).to_ne_bytes();
-        let mut output_bytes = [0u8; 4];
-        let mut row = row0;
-        for byte_off in 0..=3 {
-            // loop to populate result bytes in a column
-            let mut acc = 0;
-            for i in 0..=3 {
-                // loop to multiply by a row in the matrix
-                acc ^= xtimes(row[i], input_bytes[i]);
-            }
-            output_bytes[byte_off] = acc;
-            row.rotate_left(1);
-        }
-        *x = u32::from_ne_bytes(output_bytes);
+        let bytes = (*column).to_le_bytes();
+        *column = u32::from_le_bytes([
+            xtimes(0x02, bytes[0]) ^ xtimes(0x03, bytes[1]) ^ bytes[2] ^ bytes[3],
+            bytes[0] ^ xtimes(0x02, bytes[1]) ^ xtimes(0x03, bytes[2]) ^ bytes[3],
+            bytes[0] ^ bytes[1] ^ xtimes(0x02, bytes[2]) ^ xtimes(0x03, bytes[3]),
+            xtimes(0x03, bytes[0]) ^ bytes[1] ^ bytes[2] ^ xtimes(0x02, bytes[3]),
+        ]);
+    });
+}
+
+fn inv_mix_columns(state: &mut State) {
+    state.iter_mut().for_each(|column| {
+        // loop over columns
+        let bytes = (*column).to_le_bytes();
+        *column = u32::from_le_bytes([
+            xtimes(0x0e, bytes[0])
+                ^ xtimes(0x0b, bytes[1])
+                ^ xtimes(0x0d, bytes[2])
+                ^ xtimes(0x09, bytes[3]),
+            xtimes(0x09, bytes[0])
+                ^ xtimes(0x0e, bytes[1])
+                ^ xtimes(0x0b, bytes[2])
+                ^ xtimes(0x0d, bytes[3]),
+            xtimes(0x0d, bytes[0])
+                ^ xtimes(0x09, bytes[1])
+                ^ xtimes(0x0e, bytes[2])
+                ^ xtimes(0x0b, bytes[3]),
+            xtimes(0x0b, bytes[0])
+                ^ xtimes(0x0d, bytes[1])
+                ^ xtimes(0x09, bytes[2])
+                ^ xtimes(0x0e, bytes[3]),
+        ]);
     });
 }
 
@@ -267,22 +258,16 @@ mod test {
     fn test_inv_shift_rows() {
         let mut input = [0x30201000, 0x31211101, 0x32221202, 0x33231303];
         inv_shift_rows(&mut input);
-        assert_eq_hex!(
-            input,
-            [0x31221300, 0x32231001, 0x33201102, 0x30211203],
-        )
-
+        assert_eq_hex!(input, [0x31221300, 0x32231001, 0x33201102, 0x30211203],)
     }
 
     #[test]
-    fn test_inv_mix_columns() {
-        let mut input = [0x01010101, 0x02020202, 0x03030303, 0x04040404];
+    fn test_mix_columns() {
+        let mut input = [0x12345678, 0x00000000, 0xffffffff, 0x10101010];
+        let output = input;
+        mix_columns(&mut input);
         inv_mix_columns(&mut input);
-        assert_eq_hex!(
-            input,
-            [0,0,0,0],
-        )
-
+        assert_eq_hex!(input, output,)
     }
 
     #[test]
