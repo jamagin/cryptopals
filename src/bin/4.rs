@@ -3,7 +3,7 @@ use cryptopals::frequency::break_single_byte_xor;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-// Exercise 1-4 solution
+// Exercise 4 solution
 
 fn main() -> Result<(), std::io::Error> {
     let filename = std::env::args().nth(1).expect("requires a file to read");

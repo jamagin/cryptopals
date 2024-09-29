@@ -3,10 +3,10 @@ use std::{collections::BTreeMap, fs::File, io::Read};
 use cryptopals::{
     bytes::{xor_byte_array, ParseBytes},
     distance::hamming_distance,
-    frequency::break_single_byte_xor,
+    frequency::{break_single_byte_xor, distance_metric},
 };
 
-// Exercise 1-6 solution
+// Exercise 6 solution
 
 fn main() -> Result<(), std::io::Error> {
     let filename = std::env::args().nth(1).expect("requires a file to read");
@@ -52,15 +52,23 @@ fn main() -> Result<(), std::io::Error> {
         result
     }
 
-    for _ in 0..3 {
-        println!("{:?}", key_size_scores.pop_first());
-        let (_, key_size) = key_size_scores.pop_first().expect("didn't find a key_size");
-        let likely_key: Vec<u8> = transpose_by_block(key_size, &input)
-            .iter()
-            .map(|block| break_single_byte_xor(block.clone()).1)
-            .collect();
-        let decrypt = xor_byte_array(input.as_slice(), likely_key.as_slice());
-        println!("{}", String::from_utf8_lossy(decrypt.as_slice()));
-    }
+    let candidates: Vec<(f32, Vec<u8>, Vec<u8>)> = (0..5)
+        .map(|_| {
+            let (_, key_size) = key_size_scores.pop_first().expect("didn't find a key_size");
+            let likely_key: Vec<u8> = transpose_by_block(key_size, &input)
+                .iter()
+                .map(|block| break_single_byte_xor(block.clone()).1)
+                .collect();
+            let decrypt = xor_byte_array(input.as_slice(), likely_key.as_slice());
+            let score = distance_metric(&decrypt);
+            (score, likely_key, decrypt)
+        })
+        .collect();
+
+    let (_, key, decrypt) = candidates
+        .into_iter()
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .expect("can't find min");
+    println!("{:x?} {}", key, String::from_utf8_lossy(decrypt.as_slice()));
     Ok(())
 }

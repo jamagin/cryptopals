@@ -48,21 +48,25 @@ fn sum_squares_distance(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     zip(a, b).map(|(a, b)| (a - b).powi(2)).sum()
 }
 
+pub fn distance_metric(text: &Vec<u8>) -> f32 {
+    let reference = ENGLISH_LETTER_FREQ.to_vec();
+    let (letters, mut non_letters): (Vec<u8>, Vec<u8>) =
+        text.iter().partition(|x| x.is_ascii_alphabetic());
+    let frequencies = count_frequencies(&letters);
+    // least sum of squares difference, but count of non-letters penalizes a lot
+    non_letters.retain(|x| *x != b' '); // spaces are free
+    let penalty = non_letters.len();
+    sum_squares_distance(&frequencies, &reference) + penalty as f32
+}
+
 pub fn break_single_byte_xor(cyphertext: Vec<u8>) -> (f32, u8, Vec<u8>) {
     let mut min_distance: Option<f32> = None;
     let mut best_key = 0x00;
     let mut best_decrypt = cyphertext.clone();
-    let reference = ENGLISH_LETTER_FREQ.to_vec();
 
     for key in 0x00..=0xff {
         let decrypt = xor_byte_array(&cyphertext, &[key]);
-        let (letters, mut non_letters): (Vec<u8>, Vec<u8>) =
-            decrypt.iter().partition(|x| x.is_ascii_alphabetic());
-        let frequencies = count_frequencies(&letters);
-        // least sum of squares difference, but count of non-letters penalizes a lot
-        non_letters.retain(|x| *x != b' '); // spaces are free
-        let penalty = non_letters.len();
-        let distance = sum_squares_distance(&frequencies, &reference) + penalty as f32;
+        let distance = distance_metric(&decrypt);
 
         if (min_distance.is_none()) || (distance < min_distance.unwrap()) {
             min_distance = Some(distance);
