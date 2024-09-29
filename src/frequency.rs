@@ -48,7 +48,7 @@ fn sum_squares_distance(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     zip(a, b).map(|(a, b)| (a - b).powi(2)).sum()
 }
 
-pub fn distance_metric(text: &Vec<u8>) -> f32 {
+pub fn distance_metric(text: &[u8]) -> f32 {
     let reference = ENGLISH_LETTER_FREQ.to_vec();
     let (letters, mut non_letters): (Vec<u8>, Vec<u8>) =
         text.iter().partition(|x| x.is_ascii_alphabetic());
