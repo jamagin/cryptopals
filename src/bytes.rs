@@ -112,7 +112,7 @@ impl RenderBytes for Vec<u8> {
     }
 }
 
-// Exercise 1-2
+// Exercise 2
 pub fn xor_byte_array(message: &[u8], key: &[u8]) -> Vec<u8> {
     assert!(message.len() >= key.len());
 
@@ -124,8 +124,20 @@ pub fn xor_byte_array(message: &[u8], key: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+// Exercise 9 solution
+pub fn pkcs7_pad(message: &[u8], block_size: usize) -> Vec<u8> {
+    assert!(block_size <= 256);
+    let padding_size = block_size - (message.len() % block_size);
+    let mut padding = vec![padding_size as u8; padding_size];
+    let mut padded_message = Vec::from(message);
+    padded_message.append(&mut padding);
+    padded_message
+}
+
 #[cfg(test)]
 mod tests {
+    use assert_hex::assert_eq_hex;
+
     use super::*;
 
     #[test]
@@ -144,7 +156,7 @@ mod tests {
         }
     }
 
-    // Exercise 1-1 solution
+    // Exercise 1 solution
     #[test]
     fn test_hex_to_base_64() {
         let hex = b"49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
@@ -171,7 +183,7 @@ mod tests {
         );
     }
 
-    // Exercise 1-2 solution
+    // Exercise 2 solution
     #[test]
     fn test_fixed_xor_byte_vec() {
         let a = b"1c0111001f010100061a024b53535009181c";
@@ -199,7 +211,7 @@ mod tests {
         );
     }
 
-    // Exercise 1-5 solution
+    // Exercise 5 solution
     #[test]
     fn test_repeated_xor_byte_vec_for_1_5() {
         let plaintext = b"Burning 'em, if you ain't quick and nimble\n\
@@ -228,6 +240,15 @@ mod tests {
         assert_eq!(
             Vec::from_base64_byte_array(b"VGhpc\nyBpc yBhIE1\nJTUUgdGVzdA==\n").unwrap(),
             b"This is a MIME test"
+        );
+    }
+
+    // Exercise 9
+    #[test]
+    fn test_pkcs7_pad() {
+        assert_eq_hex!(
+            pkcs7_pad(b"YELLOW SUBMARINE", 20).as_slice(),
+            b"YELLOW SUBMARINE\x04\x04\x04\x04"
         );
     }
 }
