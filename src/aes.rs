@@ -1,5 +1,8 @@
 use std::{
-    arch::aarch64::{uint8x16_t, vaeseq_u8},
+    arch::{
+        aarch64::{uint8x16_t, vaeseq_u8},
+        asm,
+    },
     mem::{self, transmute},
 };
 
@@ -103,7 +106,7 @@ use std::{
 // }
 
 const fn rotword(a: u32) -> u32 {
-    a.rotate_left(8)
+    a.rotate_right(8) // assumes endianness
 }
 
 // const fn inverse(a: u8) -> u8 {
@@ -150,11 +153,19 @@ const fn rotword(a: u32) -> u32 {
 //     acc ^ reduction
 // }
 
-unsafe fn subword(a: u32) -> u32 {
-    let zeros: uint8x16_t = mem::zeroed();
-    let key: uint8x16_t = transmute(a as u128);
-    let result: u128 = transmute(vaeseq_u8(zeros, key));
-    result as u32
+pub fn subword(a: u32) -> u32 {
+    let result: u32;
+    unsafe {
+        asm!(
+            "dup v1.4s, {a:w}",
+            "movi v0.16b, #0",
+            "aese v0.16b, v1.16b",
+            "umov {result:w}, v0.s[0]",
+            a = in(reg) a,
+            result = out(reg) result,
+        );
+    }
+    result
 }
 
 // const fn inv_subword(a: u32) -> u32 {
@@ -164,7 +175,9 @@ unsafe fn subword(a: u32) -> u32 {
 //         | (INV_SBOX[(a & 0xff) as usize] as u32)
 // }
 
-const RCON: [u8; 10] = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
+const RCON: [u8; 11] = [
+    0, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36,
+];
 
 fn key_expansion(key: &[u8], n_k: usize, n_r: usize) -> Vec<u32> {
     let mut w = vec![0u32; n_k * (n_r + 1)];
@@ -175,9 +188,18 @@ fn key_expansion(key: &[u8], n_k: usize, n_r: usize) -> Vec<u32> {
     for i in n_k..=4 * n_r + 3 {
         let mut temp = w[i - 1];
         if i % n_k == 0 {
-            temp = unsafe { subword(rotword(temp)) } ^ (RCON[(i / n_k) - 1] as u32);
+            println!(
+                "i: {} temp: {:x} rotword(temp): {:x} subword(rotword(temp)): {:x} after-xor: {:x}",
+                i,
+                temp,
+                rotword(temp),
+                subword(rotword(temp)),
+                subword(rotword(temp)) ^ (RCON[i / n_k] as u32)
+            );
+            temp = subword(rotword(temp)) ^ (RCON[i / n_k] as u32);
         } else if (n_k > 6) && (i % n_k == 4) {
-            temp = unsafe { subword(temp) };
+            println!("i: {} temp: {:x}", i, temp);
+            temp = subword(temp);
         }
         w[i] = w[i - n_k] ^ temp;
     }
@@ -212,6 +234,10 @@ mod test {
         assert_eq_hex!(key_expansion(&key, key.len() / 4, 10), expanded);
     }
 
+    #[test]
+    fn test_subword() {
+        assert_eq_hex!(subword(0x11223344), 0x8293c31b)
+    }
     // #[test]
     // fn test_inv_shift_rows() {
     //     let mut input = [0x30201000, 0x31211101, 0x32221202, 0x33231303];
